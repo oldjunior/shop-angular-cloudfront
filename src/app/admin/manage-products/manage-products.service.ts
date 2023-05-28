@@ -1,7 +1,8 @@
 import { Injectable, Injector } from '@angular/core';
-import { EMPTY, Observable } from 'rxjs';
+import { EMPTY, Observable, of, throwError } from 'rxjs';
 import { ApiService } from '../../core/api.service';
-import { switchMap } from 'rxjs/operators';
+import { catchError, switchMap } from 'rxjs/operators';
+import { HttpErrorResponse } from '@angular/common/http';
 
 @Injectable()
 export class ManageProductsService extends ApiService {
@@ -19,23 +20,39 @@ export class ManageProductsService extends ApiService {
 
     return this.getPreSignedUrl(file.name).pipe(
       switchMap((url) =>
-        this.http.put(url, file, {
-          headers: {
-            // eslint-disable-next-line @typescript-eslint/naming-convention
-            'Content-Type': 'text/csv',
-          },
-        })
-      )
+        url !== null
+          ? this.http.put(url, file, {
+              headers: {
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                'Content-Type': 'text/csv',
+              },
+            })
+          : throwError(() => null)
+      ),
+      catchError((err: unknown) => of(null))
     );
   }
 
-  private getPreSignedUrl(fileName: string): Observable<string> {
+  private getPreSignedUrl(fileName: string): Observable<string | null> {
     const url = this.getUrl('import', 'import');
 
-    return this.http.get<string>(url, {
-      params: {
-        name: fileName,
-      },
-    });
+    return this.http
+      .get<string>(url, {
+        params: {
+          name: fileName,
+        },
+        headers: {
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          Authorization: (localStorage.getItem('auth_token') as string) || '',
+        },
+      })
+      .pipe(
+        catchError((err: unknown) => {
+          const error = err as HttpErrorResponse;
+
+          alert(error.error.message);
+          return of(null);
+        })
+      );
   }
 }
